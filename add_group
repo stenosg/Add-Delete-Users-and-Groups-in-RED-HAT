@@ -1,0 +1,59 @@
+#! /usr/bin/python
+
+#Albert Chen
+#
+#George Stenos
+#
+
+from optparse import OptionParser
+import re, sys, datetime, shutil
+
+parser = OptionParser()
+parser.add_option("-n", "--name", dest="groupname", help="Add group with groupname GROUP to /etc/group", metavar="GROUP")
+parser.add_option("-g", "--gid", dest="gid", help="Add group with gid GID to /etc/group", metavar="GID")
+(options, args) = parser.parse_args()
+
+dateTime = datetime.datetime.now()
+dateTimeStr = str(dateTime.year) + str(dateTime.month) + str(dateTime.day) + str(dateTime.hour) + str(dateTime.minute) + str(dateTime.second)
+
+#Prints the error to stderr and appends it to the log.
+def log_error(error):
+	sys.stderr.write(error + "\n")
+	log = dateTimeStr + "\tWARN\t" + sys.argv[0] + "\t" + error + "\n"
+	open('accounts.log', 'a+b').write(log)
+	sys.exit(1)
+
+#No groupname given
+if not options.groupname:
+	log_error("Groupname not given")
+
+#No GID given
+if not options.gid:
+	log_error("GID not given")
+
+#Invalid GID
+if not re.match('[0-9]+', options.gid) or int(options.gid) > 65535:
+	log_error("Invalid GID given. GID must be a number between 0 and 65535")
+
+#Invalid Group Name
+if not re.match('[_a-z][-0-9_a-z]*', options.groupname):
+	log_error("Invalid groupname given. Groupname must be alphanumeric starting with [_a-z]")
+
+#Check for duplicates
+groupText = open('./etc/group', 'r')
+for line in groupText:
+	fields = line.split(':')
+	if(options.groupname == fields[0]):
+		log_error("Invalid groupname given. Duplicate groupname: " + options.groupname)
+	if(options.gid == fields[2]):
+		log_error("Invalid GID given. Duplicate GID: " + options.gid)
+
+#Create backup file
+backupFile = './etc/group.' + dateTimeStr
+shutil.copyfile('./etc/group', backupFile)
+
+#Append to group file
+entry = options.groupname + ':x:' + options.gid + ':\n'
+open('./etc/group', 'a+b').write(entry)
+log = dateTimeStr + "\tINFO\t" + sys.argv[0] + "\tAdded " + entry
+open('accounts.log', 'a+b').write(log)

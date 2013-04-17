@@ -1,0 +1,95 @@
+#! /usr/bin/python
+
+#Albert Chen
+#
+#George Stenos
+#
+
+from optparse import OptionParser
+import re, sys, datetime, shutil, os, fileinput
+
+counter=0
+
+dateTime = datetime.datetime.now()
+dateTimeStr = str(dateTime.year) + str(dateTime.month) + str(dateTime.day) + str(dateTime.hour) + str(dateTime.minute) + str(dateTime.second)
+
+parser = OptionParser()
+parser.add_option("-l", "--login", dest="login", help="Move 'home/login' to 'archived_homedirs/login.date'", metavar="LOGIN")
+(options, args) = parser.parse_args()
+
+
+#Function for printing errors
+def log_error(error):
+	sys.stderr.write(error + "\n")
+	log = dateTimeStr + "\tWARN\t" + sys.argv[0] + "\t" + error + "\n"
+	open('accounts.log', 'a+b').write(log)
+	sys.exit(1)
+
+
+#handles error if the login was not specified
+if not options.login: 
+	error = "Login was not given" + "\n"
+	log_error(error)
+
+		
+#handles the error if the login is not in the /etc/passwd file
+checklogin = open('./etc/passwd', 'r') 
+for line in checklogin:
+	fields = line.split(':')
+	if(options.login == fields[0]):
+		counter += 1
+
+		
+    
+if(counter == 0):
+	checklogin.close()
+	error = "Login name is invalid" + "\n"
+	log_error(error)
+
+
+
+
+#Folders for moving
+src="./home/" + options.login
+dst="./archived_homedirs/" + options.login + "." + dateTimeStr# .date', where date is the UNIX time in seconds.
+
+gekas = os.path.dirname(dst)
+
+
+if not os.path.isdir(src):
+	error="The folder for /home/" + options.login + " does not exist \n"
+	log_error(error)
+	
+#Makes archived folder only if home/login exists
+if os.path.isdir(src):
+	if not os.path.exists(gekas):
+		os.makedirs(dst)
+
+#Moves the folder if home/login exists
+if os.path.isdir(src):
+	os.system( "mv %s %s" % (src, dst) )
+
+
+backupFile = './etc/passwd.' + dateTimeStr
+shutil.copyfile('./etc/passwd', backupFile)
+
+
+f = open('./etc/passwd', 'r')
+
+
+
+for xline in fileinput.FileInput('./etc/passwd', inplace=1):
+    	if (options.login != xline.split(':')[0]):
+    		print xline, #comma ensures that it does not print a newline
+	
+
+
+
+f.close()
+
+
+
+log = dateTimeStr + "\tINFO\t" + sys.argv[0] + "\tArchived " + options.login
+open('accounts.log', 'a+b').write(log)
+
+

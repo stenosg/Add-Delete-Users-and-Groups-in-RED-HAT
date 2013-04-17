@@ -1,0 +1,99 @@
+#! /usr/bin/python
+
+#Albert Chen
+#
+#George Stenos
+#
+
+
+from optparse import OptionParser
+import re, sys, datetime, shutil, os
+
+parser = OptionParser()
+parser.add_option("-l", "--login", dest="login", help="Add user with LOGIN to /etc/passwd", metavar="LOGIN")
+parser.add_option("-u", "--uid", dest="uid", help="Add user with UID to /etc/passwd", metavar="UID")
+parser.add_option("-g", "--gid", dest="gid", help="Add user with GID to /etc/passwd", metavar="GID")
+parser.add_option("-i", "--gecos", dest="gecos", help="Add user with GECOS to /etc/passwd", metavar="GECOS")
+parser.add_option("-d", "--home", dest="home", help="Add user with HOME to /etc/passwd", metavar="HOME")
+parser.add_option("-s", "--shell", dest="shell", help="Add user with SHELL to /etc/passwd", metavar="SHELL")
+(options, args) = parser.parse_args()
+
+dateTime = datetime.datetime.now()
+dateTimeStr = str(dateTime.year) + str(dateTime.month) + str(dateTime.day) + str(dateTime.hour) + str(dateTime.minute) + str(dateTime.second)
+
+#Prints the error to stderr and appends it to the log.
+def log_error(error):
+	sys.stderr.write(error + "\n")
+	log = dateTimeStr + "\tWARN\t" + sys.argv[0] + "\t" + error + "\n"
+	open('accounts.log', 'a+b').write(log)
+	sys.exit(1)
+
+#Check all arguments are given
+if not options.login:
+	log_error("Login not given")
+if not options.uid:
+	log_error("UID not given")
+if not options.gid:
+	log_error("GID not given")
+if not options.gecos:
+	log_error("GECOS not given")
+if not options.home:
+	log_error("Home directory not given")
+if not options.shell:
+	log_error("Shell not given")
+
+#Alphanumeric login
+if not re.match('[_a-z][-0-9_a-z]*', options.login):
+	log_error("Invalid login given. Login must be alphanumeric starting with [_a-z]")
+
+#UID is numeric
+if not re.match('[0-9]+', options.uid):
+	log_error("Invalid UID given. UID must be numeric.")
+
+#GID is numeric
+if not re.match('[0-9]+', options.gid):
+	log_error("Invalid GID given. GID must be numeric.")
+
+#GID is in etc/group
+matched = False
+groupText = open('./etc/group', 'r')
+for line in groupText:
+	fields = line.split(':')
+	if(fields[2] == options.gid):
+		matched = True
+if not matched:
+	log_error("Invalid GID given. GID must already exist in /etc/group")
+
+#Home directory is valid
+if re.match('.*/home/[_a-zA-Z0-9]+', options.home):
+	if not os.path.isdir(re.search('.*/home/', options.home).group(0)):
+		log_error("Invalid home directory given. Home directory must be an absolute path /home/user") 
+
+#Shell is valid
+if not (re.match('/bin/bash/?', options.shell) or re.match('/bin/tcsh/?', options.shell)):
+	log_error("Invalid shell given. Shell must be either /bin/bash or /bin/tcsh")
+
+#Login/UID/home not in etc/passwd
+passwdText = open('./etc/passwd', 'r')
+for line in passwdText:
+	fields = line.split(':')
+	if(options.login == fields[0]):
+		log_error("Invalid login given. Duplicate login: " + options.login)
+	if(options.uid == fields[2]):
+		log_error("Invalid UID given. Duplicate UID: " + options.uid)
+	if(options.uid == fields[5]):
+		log_error("Invalid home directory given. Duplicate home directory: " + options.home)
+
+#Create backup file
+backupFile = './etc/passwd.' + dateTimeStr
+shutil.copyfile('./etc/passwd', backupFile)
+
+#Append to passwd file
+entry = options.login + ":x:" + options.uid + ":" + options.gid + ":" + options.gecos + ":" + options.home + ":" + options.shell + "\n"
+open('./etc/passwd', 'a+b').write(entry)
+log = dateTimeStr + "\tINFO\t" + sys.argv[0] + "\tAdded " + entry
+open('accounts.log', 'a+b').write(log)
+
+#Setup folder
+os.system("mkdir " + options.home)
+os.system("cp ./etc/skel/* " + options.home)

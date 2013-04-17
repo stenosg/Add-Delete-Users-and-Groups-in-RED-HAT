@@ -1,0 +1,77 @@
+#! /usr/bin/python 
+
+#Albert Chen
+#
+#George Stenos
+#
+
+from optparse import OptionParser
+import sys, datetime, shutil, os, fileinput
+
+parser = OptionParser()
+parser.add_option("-l", "--login", dest="login", help="Add user with LOGIN to group", metavar="LOGIN")
+parser.add_option("-g", "--group", dest="group", help="Add user to specified GROUP", metavar="GROUP")
+(options, args) = parser.parse_args()
+
+dateTime = datetime.datetime.now()
+dateTimeStr = str(dateTime.year) + str(dateTime.month) + str(dateTime.day) + str(dateTime.hour) + str(dateTime.minute) + str(dateTime.second)
+
+def log_error(error):
+	sys.stderr.write(error + "\n")
+	log = dateTimeStr + "\tWARN\t" + sys.argv[0] + "\t" + error + "\n"
+	open('accounts.log', 'a+b').write(log)
+	sys.exit(1)
+
+#Check all arguments are given
+if not options.login:
+	log_error("Login not given")
+if not options.group:
+	log_error("Group not given")
+
+#Check that group is in /etc/group and that the login is not already part of that group
+matched = False
+groupText = open('./etc/group', 'r')
+for line in groupText:
+	fields = line.split(':')
+	if(options.group == fields[0]):
+		for login in fields[3].split(','):
+			if(login.strip() == options.login):
+				log_error("Login " + options.login + " is already a part of " + options.group)
+		matched = True	
+if not matched:
+	log_error("Group " + options.group + " not found in /etc/group")
+
+#Check that login is in /etc/passwd
+ugid=-1
+matched = False
+passwdText = open('./etc/passwd', 'r')
+for line in passwdText:
+	fields = line.split(':')
+	if(options.login == fields[0]):
+		matched = True
+		ugid = fields[3]
+if not matched:
+	log_error(options.login + " not found in /etc/passwd")
+
+#Check that gid of user is not that of the specified group
+for line in groupText:
+	fields = line.split(':')
+	if(options.group == fields[0]):
+		if(ugid == fields[2]):
+			log_error("User gid matches that of the group to be added to")
+
+#Create backup file
+backupFile = './etc/group.' + dateTimeStr
+shutil.copyfile('./etc/group', backupFile)
+
+#Add login to group
+for line in fileinput.FileInput('./etc/group', inplace=1):
+	fields = line.split(':')
+	if(options.group == fields[0]):
+		sys.stdout.write(line.strip())
+		print "," + options.login
+	else:
+		print line,
+
+#Write to log
+log = dateTimeStr + "\tINFO\t" + sys.argv[0] + "\tAdded " + options.login + " to " + options.group + " in /etc/group"

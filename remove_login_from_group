@@ -1,0 +1,118 @@
+#! /usr/bin/python
+
+
+
+#Albert Chen
+#
+#George Stenos
+#
+
+from optparse import OptionParser
+import re, sys, datetime, shutil, os, fileinput
+
+
+counter = 0
+cnt_gid = 0
+cnt_mem = 0
+
+
+dateTime = datetime.datetime.now()
+dateTimeStr = str(dateTime.year) + str(dateTime.month) + str(dateTime.day) + str(dateTime.hour) + str(dateTime.minute) + str(dateTime.second)
+
+parser = OptionParser()
+parser.add_option("-l", "--login", dest="login", help="Move 'home/login' to 'archived_homedirs/login.date'", metavar="LOGIN")
+parser.add_option("-g", "--gid", dest="groupname", help="Checking if group name exists", metavar="GID")
+(options, args) = parser.parse_args()
+
+
+def log_error(error):
+	sys.stderr.write(error + "\n")
+	log = dateTimeStr + "\tWARN\t" + sys.argv[0] + "\t" + error + "\n"
+	open('accounts.log', 'a+b').write(log)
+	sys.exit(1)
+
+#handles error if the login was not specified
+if not options.login: 
+	error = "Login was not given" + "\n"
+	log_error(error)
+
+#handles error if the group name was not specified
+if not options.groupname: 
+	error = "GID was not given" + "\n"
+	log_error(error)
+
+
+
+
+#handles the error if the login is not in the /etc/passwd file
+checklogin = open('./etc/passwd', 'r') 
+for line in checklogin:
+	fields = line.split(':')
+	if(options.login == fields[0]):
+		counter += 1
+		
+    
+if(counter == 0):
+	checklogin.close()
+	error = "Login name is invalid" + "\n"
+	log_error(error)
+
+
+
+
+#handles if group name is not in /etc/group
+checkgid = open('./etc/group', 'r') #handles the error if the login is not in the /etc/passwd file
+for line1 in checkgid:
+	fields1 = line1.split(':')
+	if(options.groupname == fields1[0]):
+		cnt_gid += 1
+
+
+if(cnt_gid == 0):
+	checkgid.close()
+	error = "Group name is invalid" + "\n"
+	log_error(error)
+
+
+
+
+#handles if login is not a part of the group
+#No need to check if group exists because the if statement above will take care of that and exit before this nested loop is hit
+check_mem = open('./etc/group', 'r') 
+for line2 in check_mem:
+	fields2 = line2.split(':')
+	commas = fields2[3].split(',')
+	if( (options.groupname == fields2[0]) ):
+		for logins in commas:
+			if( options.login == logins.strip() ):
+				cnt_mem += 1
+
+
+if(cnt_mem == 0):
+	check_mem.close()
+	error = "Group valid but login not a part of the group." + "\n"
+	log_error(error)
+
+#make sure to call strip to account for last field
+
+
+backupFile = './etc/group.' + dateTimeStr
+shutil.copyfile('./etc/group', backupFile)
+
+
+for xline in fileinput.FileInput('./etc/group', inplace=1):
+	fields3 = xline.split(':')
+	commasz = fields3[3].split(',')
+	if ( options.groupname == fields3[0] ):
+		tempstr = fields3[0] + ":" + fields3[1] + ":" + fields3[2] + ":" + re.sub(",?" + options.login, "", fields3[3])
+		print tempstr,
+	else:
+		print xline,
+		     		
+
+log = dateTimeStr + "\tINFO\t" + sys.argv[0] + "\tArchived " + options.login
+open('accounts.log', 'a+b').write(log)
+
+
+
+

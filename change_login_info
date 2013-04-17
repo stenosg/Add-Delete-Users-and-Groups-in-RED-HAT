@@ -1,0 +1,98 @@
+#! /usr/bin/python
+
+
+#Albert Chen
+#
+#George Stenos
+#
+
+from optparse import OptionParser
+import sys, datetime, shutil, os, fileinput, re
+
+parser = OptionParser()
+parser.add_option("-l", "--login", dest="login", help="Edit user with LOGIN", metavar="LOGIN")
+parser.add_option("-i", "--gecos", dest="gecos", help="Change user gecos to GECOS", metavar="GECOS")
+parser.add_option("-d", "--home", dest="home", help="Change user home directory to HOME", metavar="HOME")
+parser.add_option("-s", "--shell", dest="shell", help="Change user shell to SHELL", metavar="SHELL")
+(options, args) = parser.parse_args()
+
+dateTime = datetime.datetime.now()
+dateTimeStr = str(dateTime.year) + str(dateTime.month) + str(dateTime.day) + str(dateTime.hour) + str(dateTime.minute) + str(dateTime.second)
+
+def log_error(error):
+	sys.stderr.write(error + "\n")
+	log = dateTimeStr + "\tWARN\t" + sys.argv[0] + "\t" + error + "\n"
+	open('accounts.log', 'a+b').write(log)
+	sys.exit(1)
+
+#Check that only 1 argument is given
+if not options.login:
+	log_error("Login name not given")
+if (len(sys.argv) != 5):
+	log_error("Only 1 field gecos, home, or shell may be changed at a time")
+
+#Check login exists in /etc/passwd
+matched = False
+passwdText = open('./etc/passwd', 'r')
+for line in passwdText:
+	fields = line.split(':')
+	if(options.login == fields[0]):
+		matched = True
+if not matched:
+	log_error("Login " + options.login + " does not exist")
+
+#Check that home directory is valid
+if options.home:
+	if re.match('.*/home/[_a-zA-Z0-9]+', options.home):
+		if not os.path.isdir(re.search('.*/home/', options.home).group(0)):
+			log_error("Invalid home directory given. Home directory must be an absolute path /home/user") 
+	else:
+		log_error("Invalid home directory given. Home directory must be an absolute path /home/user") 
+	oldHome=""
+	#Update home dir in ./etc/passwd
+	for line in fileinput.FileInput('./etc/passwd', inplace=1):
+		fields = line.split(':')
+		if (fields[0] == options.login):
+			oldHome = fields[5]
+			entry = fields[0] + ":" + fields[1] + ":" + fields[2] + ":" + fields[3] + ":" + fields[4] + ":" + options.home + ":" + fields[6]	
+			print entry
+		else:
+			print line,
+	#Move folder from old home to new home
+	os.system("mv " + oldHome + " " + options.home)
+	log = dateTimeStr + "\tINFO\t" + sys.argv[0] + "\tChanged " + options.login + " home dir from " + oldHome + " to " + options.home
+	open('accounts.log', 'a+b').write(log)
+
+#Check new shell is valid either /bin/bash or /bin/tcsh
+if options.shell:
+	if not (re.match('/bin/bash/?', options.shell) or re.match('/bin/tcsh/?', options.shell)):
+		log_error("Invalid shell given. Shell must be either /bin/bash or /bin/tcsh")
+	#Backup ./etc/passwd
+	backupFile = './etc/passwd.' + dateTimeStr
+	shutil.copyfile('./etc/passwd', backupFile)
+	#Edit shell for user
+	for line in fileinput.FileInput('./etc/passwd', inplace=1):
+		fields = line.split(':')
+		if (fields[0] == options.login):
+			entry = fields[0] + ":" + fields[1] + ":" + fields[2] + ":" + fields[3] + ":" + fields[4] + ":" + fields[5] + ":" + options.shell	
+			print entry
+		else:
+			print line, 
+	log = dateTimeStr + "\tINFO\t" + sys.argv[0] + "\tUpdated shell of user " + options.login + " to " + options.shell
+	open('accounts.log', 'a+b').write(log)
+
+#Change GECOS
+if options.gecos:
+	#Backup ./etc/passwd
+	backupFile = './etc/passwd.' + dateTimeStr
+	shutil.copyfile('./etc/passwd', backupFile)
+	#Edit GECOS for user
+	for line in fileinput.FileInput('./etc/passwd', inplace=1):
+		fields = line.split(':')	
+		if (fields[0] == options.login):
+			entry = fields[0] + ":" + fields[1] + ":" + fields[2] + ":" + fields[3] + ":" + options.gecos + ":" + fields[5] + ":" + fields[6].strip()	
+			print entry
+		else:
+			print line,
+	log = dateTimeStr + "\tINFO\t" + sys.argv[0] + "\tUpdated gecos of user " + options.login + " to " + options.gecos
+	open('accounts.log', 'a+b').write(log)
